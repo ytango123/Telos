@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# Database
+data/telos.db
+data/vectors/
+data/uploads/
+
+# Build
+.next/
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Playwright
+.playwright-cli/
+
+# Data (local only)
+data/
+
+# Agent tools
+agent-tools/
+
+# Reference projects (cloned for reference only)
+references/

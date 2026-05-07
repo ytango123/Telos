@@ -1,0 +1,28 @@
+# FastAPI & Server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+
+# Validation & Config
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.0
+
+# AI & LLM
+openai>=1.55.0
+httpx>=0.28.0
+
+# RAG & Vector Store
+lancedb>=0.17.0
+sentence-transformers>=3.3.0
+
+# Document Processing
+pymupdf>=1.25.0
+
+# Utilities
+python-dateutil>=2.9.0
+uuid6>=2024.7.10
