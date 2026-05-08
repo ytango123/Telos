@@ -1,18 +1,80 @@
 import json
+import logging
+import re
+import httpx
 from openai import AsyncOpenAI
 from typing import Optional
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
+
+def _clean_title_text(raw: str) -> str:
+    """Normalize model output into a concise plain title."""
+    if not raw:
+        return ""
+
+    title = raw.strip().strip("\"'“”‘’`")
+    # Keep only first line and remove common prefixes.
+    title = title.splitlines()[0].strip()
+    for prefix in ["标题：", "标题:", "主题：", "主题:", "Title:", "TITLE:"]:
+        if title.startswith(prefix):
+            title = title[len(prefix):].strip()
+
+    # Remove markdown bullets / numbering prefixes if present.
+    title = re.sub(r"^[-*#\d\.\)\s]+", "", title).strip()
+    # Collapse whitespace.
+    title = re.sub(r"\s+", " ", title).strip()
+    # Trim trailing punctuation.
+    title = re.sub(r"[，。！？：；,.!?;:]+$", "", title).strip()
+    return title
 
 class AIService:
     def __init__(self):
+        timeout = httpx.Timeout(
+            settings.deepseek_http_timeout,
+            connect=60.0,
+        )
         self.client = AsyncOpenAI(
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
+            timeout=timeout,
         )
         self.model = settings.deepseek_model
-    
+
+    async def summarize_title(self, description: str) -> str:
+        """Generate a concise topic title from user's detailed description."""
+        prompt = f"""请基于以下学习需求生成一个标题，尽量将长度限制在 6-28 个字符内：
+
+{description[:1000]}
+
+精确概括用户需求。
+只返回标题文字，不要解释。"""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "你是一个标题生成助手，仅返回一个标题。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=50,
+            )
+            raw_title = response.choices[0].message.content or ""
+            title = _clean_title_text(raw_title)
+            logger.info("[AI] summarize_title raw=%r cleaned=%r", raw_title, title)
+            if title:
+                return title
+        except Exception as e:
+            logger.exception("[AI] summarize_title failed: %s", e)
+
+        # Only allow two visible states: placeholder or valid AI summary.
+        fallback = "新任务"
+        logger.info("[AI] summarize_title fallback=%r", fallback)
+        return fallback
+
     async def generate_outline(
         self,
         title: str,

@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
+    # Per-request HTTP timeout (seconds); chapter calls can be slow
+    deepseek_http_timeout: float = 420.0
     
     # Database
     database_url: str = "sqlite+aiosqlite:///../data/telos.db"

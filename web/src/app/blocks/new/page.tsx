@@ -1,22 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, Loader2, Sparkles, Upload, Plus, FileText, X } from "lucide-react";
 import { api, BlockCreate } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -32,24 +24,65 @@ const sourceOptions = [
 
 export default function NewBlockPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [celebrateOpen, setCelebrateOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [textContent, setTextContent] = useState("");
+  const [showTextInput, setShowTextInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState<BlockCreate>({
-    title: "",
+    title: "新任务",
     description: "",
     target: "",
     target_depth: "standard",
     source_preferences: [],
   });
 
+  const goToBlocks = useCallback(() => {
+    setCelebrateOpen(false);
+    router.push("/blocks");
+  }, [router]);
+
+  useEffect(() => {
+    if (!celebrateOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") goToBlocks();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [celebrateOpen, goToBlocks]);
+
   const createMutation = useMutation({
-    mutationFn: (data: BlockCreate) => api.createBlock(data),
-    onSuccess: (block) => {
-      router.push(`/blocks/${block.id}`);
+    mutationFn: async (data: BlockCreate) => {
+      // Create the block
+      const block = await api.createBlock(data);
+      
+      // Upload pending files if any
+      for (const file of pendingFiles) {
+        try {
+          await api.uploadAttachment(block.id, file);
+        } catch (err) {
+          console.error("Failed to upload file:", err);
+        }
+      }
+      
+      return block;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blocks"] });
+      setCelebrateOpen(true);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) return;
+    if (!formData.description?.trim()) return;
     createMutation.mutate(formData);
   };
 
@@ -62,8 +95,92 @@ export default function NewBlockPage() {
     }));
   };
 
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setPendingFiles((prev) => [...prev, ...Array.from(files)]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemovePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveTextContent = () => {
+    if (!textContent.trim()) return;
+    const blob = new Blob([textContent], { type: "text/plain" });
+    const file = new File([blob], `note-${Date.now()}.txt`, { type: "text/plain" });
+    setPendingFiles((prev) => [...prev, file]);
+    setTextContent("");
+    setShowTextInput(false);
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <>
+      {celebrateOpen ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="created-celebrate-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-300"
+            aria-label="关闭并前往列表"
+            onClick={goToBlocks}
+          />
+          <div
+            className="relative z-[1] w-full max-w-[420px] overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-[0_24px_80px_-12px_rgba(0,0,0,0.35)] dark:shadow-[0_24px_80px_-12px_rgba(0,0,0,0.55)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[120%] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,var(--color-primary)_0%,transparent_70%)] opacity-[0.18]" />
+            <div className="relative px-8 pb-8 pt-10 text-center sm:px-10 sm:pb-10 sm:pt-12">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-b from-primary/25 to-primary/5 ring-2 ring-primary/25 ring-offset-2 ring-offset-card">
+                <Sparkles
+                  className="h-10 w-10 text-primary drop-shadow-sm"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+              </div>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                Telos
+              </p>
+              <h2
+                id="created-celebrate-title"
+                className="mt-2 text-2xl font-bold tracking-tight sm:text-[1.65rem]"
+              >
+                学习任务已创建！
+              </h2>
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-[0.9375rem]">
+                前往「我的学习」后，在对应卡片上点击
+                <span className="font-medium text-foreground">「开始生成」</span>
+                ，我们将根据你的主题与深度偏好，为你编排章节并撰写内容。你也可以先使用
+                <span className="font-medium text-foreground">「编辑」</span>
+                微调描述与目标，再开始生成。
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Button
+                  type="button"
+                  size="lg"
+                  className="h-11 min-w-[200px] gap-2 text-base shadow-md"
+                  onClick={goToBlocks}
+                  autoFocus
+                >
+                  前往我的学习
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="mt-5 text-xs text-muted-foreground/90">
+                按 Esc 或点击背景也可关闭
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="container mx-auto px-4 py-8 max-w-2xl">
       <Link
         href="/blocks"
         className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6"
@@ -84,34 +201,24 @@ export default function NewBlockPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* 标题 */}
+            {/* 问题详情 */}
             <div className="space-y-2">
-              <Label htmlFor="title">
-                学习主题 <span className="text-destructive">*</span>
+              <Label htmlFor="description">
+                问题详情 <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="title"
-                placeholder="例如：理解 Transformer 架构原理"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, title: e.target.value }))
-                }
-                required
-              />
-            </div>
-
-            {/* 描述 */}
-            <div className="space-y-2">
-              <Label htmlFor="description">详细描述</Label>
               <Textarea
                 id="description"
-                placeholder="详细描述你想学习的内容、背景知识、已有基础等..."
-                rows={4}
+                placeholder="描述你想学习的内容、问题背景、已有基础等。AI 会根据这些内容自动生成学习主题和课程..."
+                rows={5}
                 value={formData.description || ""}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
+                required
               />
+              <p className="text-xs text-muted-foreground">
+                写得越详细，生成的课程越精准。AI 会自动从中提取学习主题。
+              </p>
             </div>
 
             {/* 学习目标 */}
@@ -119,7 +226,7 @@ export default function NewBlockPage() {
               <Label htmlFor="target">学习目标</Label>
               <Textarea
                 id="target"
-                placeholder="例如：能在技术面试中清晰解释 Transformer 的核心机制..."
+                placeholder="例如：能在技术面试中清晰解释核心机制、能独立完成相关项目..."
                 rows={2}
                 value={formData.target || ""}
                 onChange={(e) =>
@@ -134,32 +241,35 @@ export default function NewBlockPage() {
             {/* 深度选择 */}
             <div className="space-y-2">
               <Label>学习深度</Label>
-              <Select
-                value={formData.target_depth}
-                onValueChange={(value: "quick_overview" | "standard" | "deep_dive") =>
-                  setFormData((prev) => ({ ...prev, target_depth: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="quick_overview">
-                    🚀 快速了解 - 3-4 章节，掌握核心概念
-                  </SelectItem>
-                  <SelectItem value="standard">
-                    📚 标准学习 - 5-7 章节，全面覆盖主题
-                  </SelectItem>
-                  <SelectItem value="deep_dive">
-                    🔬 深入研究 - 8-12 章节，深度技术细节
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, target_depth: "standard" }))}
+                  className={`flex-1 py-2 px-4 rounded-lg border text-sm font-medium transition-colors ${
+                    formData.target_depth === "standard"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  Standard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, target_depth: "deep_dive" }))}
+                  className={`flex-1 py-2 px-4 rounded-lg border text-sm font-medium transition-colors ${
+                    formData.target_depth === "deep_dive"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  Deep Learning
+                </button>
+              </div>
             </div>
 
-            {/* 偏好来源 */}
+            {/* 偏好网络资料来源 */}
             <div className="space-y-2">
-              <Label>偏好资料来源</Label>
+              <Label>偏好网络资料来源</Label>
               <div className="flex flex-wrap gap-2">
                 {sourceOptions.map((source) => (
                   <Badge
@@ -177,15 +287,115 @@ export default function NewBlockPage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                选择你偏好的资料来源，AI 会优先参考这些平台
+                选择你偏好的网络资料来源，AI 会优先参考这些平台
               </p>
+            </div>
+
+            {/* 参考资料 */}
+            <div className="space-y-3">
+              <Label>参考资料</Label>
+              <p className="text-xs text-muted-foreground -mt-1">
+                上传文件、添加文字笔记或链接，AI 会在生成时参考这些内容
+              </p>
+              
+              {/* 待上传的文件列表 */}
+              {pendingFiles.length > 0 && (
+                <div className="space-y-2">
+                  {pendingFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2"
+                    >
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 truncate text-sm">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePendingFile(index)}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 文字输入区域 */}
+              {showTextInput && (
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <Textarea
+                    placeholder="输入文字笔记、参考链接等..."
+                    rows={4}
+                    value={textContent}
+                    onChange={(e) => setTextContent(e.target.value)}
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowTextInput(false);
+                        setTextContent("");
+                      }}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveTextContent}
+                      disabled={!textContent.trim()}
+                    >
+                      保存
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 上传按钮 */}
+              {!showTextInput && (
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.txt,.md,.doc,.docx,.png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    上传文件
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowTextInput(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    添加文字/链接
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* 提交按钮 */}
             <div className="flex gap-4 pt-4">
               <Button
                 type="submit"
-                disabled={!formData.title.trim() || createMutation.isPending}
+                disabled={!formData.description?.trim() || createMutation.isPending}
                 className="flex-1"
               >
                 {createMutation.isPending ? (
@@ -213,5 +423,6 @@ export default function NewBlockPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

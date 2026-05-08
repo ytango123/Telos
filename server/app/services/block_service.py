@@ -89,6 +89,8 @@ async def update_block_status(
     progress: int = 0,
     message: Optional[str] = None,
     course_id: Optional[str] = None,
+    *,
+    clear_course_id: bool = False,
 ) -> Optional[Block]:
     """Update block status and progress"""
     block = await get_block(db, block_id)
@@ -98,7 +100,9 @@ async def update_block_status(
     block.status = status
     block.generation_progress = progress
     block.status_message = message
-    if course_id:
+    if clear_course_id:
+        block.course_id = None
+    elif course_id:
         block.course_id = course_id
     
     await db.flush()
@@ -108,11 +112,20 @@ async def update_block_status(
 
 
 async def delete_block(db: AsyncSession, block_id: UUID) -> bool:
-    """Delete a block"""
+    """Delete a block, its courses (including partial generation), and vector index."""
     block = await get_block(db, block_id)
     if not block:
         return False
-    
+
+    from . import course_service
+    from .rag_service import rag_service
+
+    await course_service.delete_courses_by_block(db, str(block_id))
+    try:
+        await rag_service.delete_block_index(str(block_id))
+    except Exception:
+        pass
+
     await db.delete(block)
     await db.flush()
     return True

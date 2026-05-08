@@ -100,3 +100,19 @@ async def delete_course(db: AsyncSession, course_id: UUID) -> bool:
     await db.delete(course)
     await db.flush()
     return True
+
+
+async def delete_courses_by_block(db: AsyncSession, block_id: str) -> int:
+    """Delete all courses belonging to a block (e.g. partial generation). Clears block.course_id."""
+    from app.models.db_models import Block
+
+    block = await db.get(Block, block_id)
+    if block:
+        block.course_id = None
+
+    result = await db.execute(select(Course).where(Course.block_id == block_id))
+    courses = list(result.scalars().all())
+    for course in courses:
+        await db.delete(course)
+    await db.flush()
+    return len(courses)
