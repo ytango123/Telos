@@ -6,7 +6,6 @@ from uuid import UUID
 
 
 class TargetDepth(str, Enum):
-    QUICK_OVERVIEW = "quick_overview"
     STANDARD = "standard"
     DEEP_DIVE = "deep_dive"
 
@@ -28,11 +27,31 @@ class AttachmentBase(BaseModel):
 
 class AttachmentResponse(AttachmentBase):
     id: str
+    kind: str = "file"
     file_path: str
+    source_url: Optional[str] = None
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+
+class NoteCreate(BaseModel):
+    """A pasted text note provided by the user as reference material."""
+    content: str = Field(..., min_length=1)
+
+
+class LinkCreate(BaseModel):
+    """A specific URL the user wants converted directly to context.
+
+    `kind` distinguishes:
+      - "link" (default): regular web page, will be fetched and converted to markdown
+      - "video": video page (YouTube/Bilibili/...), will only be referenced for
+        in-page embedding (no markdown extraction)
+    """
+    url: str = Field(..., min_length=1, max_length=2000)
+    title: Optional[str] = None
+    kind: str = Field(default="link", pattern="^(link|video)$")
 
 
 # Block schemas
@@ -61,6 +80,7 @@ class BlockResponse(BlockBase):
     status: BlockStatus = BlockStatus.DRAFT
     generation_progress: int = 0
     status_message: Optional[str] = None
+    generation_debug: Optional[dict] = Field(default_factory=dict)
     course_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime

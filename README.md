@@ -1,159 +1,77 @@
-# Telos - AI 驱动的定制化学习平台
+# Telos
 
-Telos 是一个 AI 驱动的个性化学习平台。告诉我们你想学什么，AI 将为你生成完整的、结构化的学习课程。
+Telos is an AI learning-workspace prototype that turns a concrete goal, trusted user materials, and retrieved online sources into a structured, multimodal course that is ready to study.
 
-## 特性
+![Telos landing page](docs/screenshots/landing.webp)
 
-- **目标驱动**: 设定学习目标和深度，AI 根据需求定制内容
-- **异步生成**: 提交学习任务后后台自动生成，完成后即可学习
-- **开箱即学**: 生成的课程拥有专业的章节布局，支持代码高亮、数学公式
-- **RAG 增强**: 上传你的资料（PDF/文本），AI 会参考这些内容生成课程
+## Why Telos
 
-## 技术栈
+Most AI learning tools return answers, summaries, or a list of links. Telos focuses on the deliverable: a complete course with ordered chapters, explanations, code, figures, and video embedded at the point where each source supports learning.
 
-### 前端
-- Next.js 15 (App Router)
-- Tailwind CSS
-- shadcn/ui
-- React Query
-- react-markdown + KaTeX
+The same topic is organized differently for broad exploration, conceptual mastery, interview preparation, or academic research. A goal-configuration layer controls depth, prerequisites, examples, and emphasis before the course is generated.
 
-### 后端
-- Python FastAPI
-- SQLAlchemy + SQLite
-- LanceDB (向量存储)
-- DeepSeek API
+## Workflow
 
-## 快速开始
+1. Describe what you want to learn and why.
+2. Add files, notes, webpages, or videos you already trust.
+3. Select preferred sources and the desired learning depth.
+4. Let the retrieval and generation pipeline organize a course.
+5. Read the result in a focused learning workspace.
 
-### 前置要求
+| Create a learning task | Study the generated course |
+| --- | --- |
+| ![Learning task form](docs/screenshots/create-task.webp) | ![Course reader](docs/screenshots/course-reader.webp) |
 
-- Node.js 18+
-- Python 3.11+
-- DeepSeek API Key
+## Current capabilities
 
-### 1. 克隆项目
+- asynchronous, goal-conditioned course generation;
+- PDF, text, URL, image, and video source ingestion;
+- retrieval, deduplication, source ranking, and citation-aware generation;
+- structured chapters with code highlighting, mathematics, Mermaid diagrams, and embedded media;
+- a course workspace for generation status and reading progress.
 
-```bash
-git clone <repository-url>
-cd telos
+## Architecture
+
+- Web: Next.js 16, React, TypeScript, Tailwind CSS 4, TanStack Query
+- API: FastAPI, SQLAlchemy, SQLite
+- Retrieval: Tavily, Jina Reader, GitHub and arXiv source adapters
+- Storage: local uploads and LanceDB vectors
+- Models: configurable text, vision, embedding, and speech providers
+
+```text
+web/       Next.js interface and course reader
+server/    FastAPI routes, generation agents, retrieval, and media services
+docs/      product and implementation notes
+data/      local databases, vectors, uploads, and debug output (ignored)
 ```
 
-### 2. 配置环境变量
+## Run locally
+
+Requirements: Node.js 20+, Python 3.11+, and an API key for the configured text model.
 
 ```bash
-# 后端配置
-cd server
+git clone https://github.com/GaryYang12345/Telos.git
+cd Telos/server
 cp .env.example .env
-# 编辑 .env 填入你的 DeepSeek API Key
-```
-
-### 3. 启动后端
-
-```bash
-cd server
-
-# 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 安装依赖
+source venv/bin/activate
 pip install -r requirements.txt
-
-# 启动服务
-python -m app.main
-# 或
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 4. 启动前端
+In another terminal:
 
 ```bash
-cd web
-
-# 安装依赖
+cd Telos/web
 npm install
-
-# 启动开发服务器
 npm run dev
 ```
 
-### 5. 访问应用
+Open `http://localhost:3000`. Environment variables and optional retrieval, vision, and speech providers are documented in `server/.env.example`.
 
-打开浏览器访问 http://localhost:3000
+## Status
 
-## 使用流程
-
-1. **创建学习任务**: 描述你想学习的内容，设定学习目标和深度
-2. **上传资料** (可选): 上传相关的 PDF 或文本文件
-3. **开始生成**: 点击"开始生成"，AI 将在后台生成课程
-4. **开始学习**: 生成完成后，进入学习工作站开始学习
-
-## 项目结构
-
-```
-telos/
-├── web/                    # Next.js 前端
-│   ├── src/
-│   │   ├── app/           # 页面路由
-│   │   ├── components/    # React 组件
-│   │   └── lib/           # 工具函数
-│   └── package.json
-│
-├── server/                 # Python 后端
-│   ├── app/
-│   │   ├── routers/       # API 路由
-│   │   ├── services/      # 业务逻辑
-│   │   ├── models/        # 数据模型
-│   │   └── db/            # 数据库
-│   └── requirements.txt
-│
-├── data/                   # 数据存储
-│   ├── telos.db           # SQLite 数据库
-│   ├── vectors/           # LanceDB 向量库
-│   └── uploads/           # 上传文件
-│
-└── docs/                   # 文档
-```
-
-## API 端点
-
-### Blocks (学习任务)
-- `GET /api/blocks` - 获取任务列表
-- `POST /api/blocks` - 创建任务
-- `GET /api/blocks/{id}` - 获取任务详情
-- `PUT /api/blocks/{id}` - 更新任务
-- `DELETE /api/blocks/{id}` - 删除任务
-- `POST /api/blocks/{id}/generate` - 开始生成课程
-- `GET /api/blocks/{id}/status` - 获取生成状态
-
-### Courses (课程)
-- `GET /api/courses` - 获取课程列表
-- `GET /api/courses/{id}` - 获取课程详情（含章节）
-- `DELETE /api/courses/{id}` - 删除课程
-
-### Uploads (附件)
-- `POST /api/blocks/{id}/attachments` - 上传附件
-- `GET /api/blocks/{id}/attachments/{aid}/download` - 下载附件
-- `DELETE /api/blocks/{id}/attachments/{aid}` - 删除附件
-
-## 配置说明
-
-### DeepSeek API
-
-在 `server/.env` 中配置:
-
-```env
-DEEPSEEK_API_KEY=your_api_key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-flash
-```
-
-### 学习深度
-
-- **快速了解** (quick_overview): 3-4 章节，掌握核心概念
-- **标准学习** (standard): 5-7 章节，全面覆盖主题
-- **深入研究** (deep_dive): 8-12 章节，深度技术细节
+Telos is an active prototype. The current repository demonstrates the end-to-end product direction; editing, tutoring, exercises, flashcards, and additional source connectors remain in development.
 
 ## License
 

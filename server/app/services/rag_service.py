@@ -123,6 +123,55 @@ class RAGService:
 
         return len(chunks)
 
+    def _index_raw_text_sync(
+        self,
+        block_id: str,
+        attachment_id: str,
+        text: str,
+        filename: str,
+    ) -> int:
+        chunks = self._chunk_text(text)
+        if not chunks:
+            return 0
+
+        model = self._get_model()
+        embeddings = model.encode(chunks, show_progress_bar=False)
+        table_name = f"block_{block_id}"
+        data = [
+            {
+                "id": f"{attachment_id}_{i}",
+                "block_id": block_id,
+                "attachment_id": attachment_id,
+                "filename": filename,
+                "chunk_index": i,
+                "text": chunk,
+                "vector": embedding.tolist(),
+            }
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+        ]
+        if table_name in self.db.table_names():
+            table = self.db.open_table(table_name)
+            table.add(data)
+        else:
+            self.db.create_table(table_name, data)
+        return len(chunks)
+
+    async def index_raw_text(
+        self,
+        block_id: str,
+        attachment_id: str,
+        text: str,
+        filename: str,
+    ) -> int:
+        """Index arbitrary text (captions, transcripts) into LanceDB."""
+        return await asyncio.to_thread(
+            self._index_raw_text_sync,
+            block_id,
+            attachment_id,
+            text,
+            filename,
+        )
+
     async def index_document(
         self,
         block_id: str,

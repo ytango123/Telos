@@ -2,7 +2,7 @@ const API_BASE = "";
 
 /** Merge query cancellation with a timeout controller so either can abort fetch. */
 function mergeAbortSignals(
-  userSignal: AbortSignal | undefined,
+  userSignal: AbortSignal | null | undefined,
   timeoutSignal: AbortSignal
 ): AbortSignal {
   if (!userSignal) return timeoutSignal;
@@ -24,24 +24,29 @@ export interface Block {
   title: string;
   description: string | null;
   target: string | null;
-  target_depth: "quick_overview" | "standard" | "deep_dive";
+  target_depth: "standard" | "deep_dive";
   source_preferences: string[];
   status: "draft" | "processing" | "completed" | "failed";
   generation_progress: number;
   status_message: string | null;
+  generation_debug: Record<string, unknown>;
   course_id: string | null;
   created_at: string;
   updated_at: string;
   attachments: Attachment[];
 }
 
+export type AttachmentKind = "file" | "text" | "link" | "video";
+
 export interface Attachment {
   id: string;
+  kind: AttachmentKind;
   filename: string;
   original_name: string;
   file_type: string;
   file_size: number;
   file_path: string;
+  source_url: string | null;
   created_at: string;
 }
 
@@ -49,7 +54,7 @@ export interface BlockCreate {
   title: string;
   description?: string;
   target?: string;
-  target_depth?: "quick_overview" | "standard" | "deep_dive";
+  target_depth?: "standard" | "deep_dive";
   source_preferences?: string[];
 }
 
@@ -57,7 +62,7 @@ export interface BlockUpdate {
   title?: string;
   description?: string;
   target?: string;
-  target_depth?: "quick_overview" | "standard" | "deep_dive";
+  target_depth?: "standard" | "deep_dive";
   source_preferences?: string[];
 }
 
@@ -264,6 +269,28 @@ class ApiClient {
 
       xhr.open("POST", `/api/blocks/${blockId}/attachments`);
       xhr.send(formData);
+    });
+  }
+
+  async addNote(blockId: string, content: string): Promise<Attachment> {
+    return this.fetch<Attachment>(`/api/blocks/${blockId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async addLink(
+    blockId: string,
+    url: string,
+    options?: { title?: string; kind?: "link" | "video" }
+  ): Promise<Attachment> {
+    return this.fetch<Attachment>(`/api/blocks/${blockId}/links`, {
+      method: "POST",
+      body: JSON.stringify({
+        url,
+        title: options?.title,
+        kind: options?.kind ?? "link",
+      }),
     });
   }
 

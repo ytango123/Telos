@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.config import settings
-from app.routers import blocks, courses, health, uploads
+from app.routers import blocks, courses, health, proxy, uploads
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(blocks.router, prefix="/api/blocks", tags=["Blocks"])
 app.include_router(courses.router, prefix="/api/courses", tags=["Courses"])
 app.include_router(uploads.router, prefix="/api/blocks", tags=["Uploads"])
+app.include_router(proxy.router, prefix="/api/proxy", tags=["Proxy"])
 
 
 if __name__ == "__main__":

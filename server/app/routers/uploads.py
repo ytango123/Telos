@@ -8,10 +8,20 @@ import os
 
 from app.db.database import get_db
 from app.config import settings
-from app.models.schemas import AttachmentResponse
+from app.models.schemas import AttachmentResponse, NoteCreate, LinkCreate
 from app.models.db_models import Attachment, Block
 
 router = APIRouter()
+
+
+async def _get_block_or_404(db: AsyncSession, block_id: UUID) -> Block:
+    from sqlalchemy import select
+
+    result = await db.execute(select(Block).where(Block.id == str(block_id)))
+    block = result.scalar_one_or_none()
+    if not block:
+        raise HTTPException(status_code=404, detail="Block not found")
+    return block
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".doc", ".docx", ".png", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -23,14 +33,8 @@ async def upload_attachment(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload an attachment to a block"""
-    from sqlalchemy import select
-    
-    # Check block exists
-    result = await db.execute(select(Block).where(Block.id == str(block_id)))
-    block = result.scalar_one_or_none()
-    if not block:
-        raise HTTPException(status_code=404, detail="Block not found")
+    """Upload an attachment (file) to a block"""
+    await _get_block_or_404(db, block_id)
     
     # Validate file extension
     ext = Path(file.filename).suffix.lower()
@@ -62,6 +66,7 @@ async def upload_attachment(
     # Create attachment record
     attachment = Attachment(
         block_id=str(block_id),
+        kind="file",
         filename=unique_filename,
         original_name=file.filename,
         file_type=file.content_type or "application/octet-stream",
@@ -83,9 +88,104 @@ async def upload_attachment(
                 file_type=ext,
                 filename=file.filename,
             )
-        except Exception as e:
+        except Exception:
+            pass
+    elif ext == ".docx":
+        try:
+            from app.services.materials.extractors.docx import extract_text_from_docx
+            from app.services.rag_service import rag_service
+
+            text = extract_text_from_docx(str(file_path))
+            if text.strip():
+                await rag_service.index_raw_text(
+                    str(block_id),
+                    attachment.id,
+                    text,
+                    file.filename or "document.docx",
+                )
+        except Exception:
             pass
     
+    return attachment
+
+
+@router.post("/{block_id}/notes", response_model=AttachmentResponse)
+async def add_note(
+    block_id: UUID,
+    note: NoteCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a pasted text note as reference material (stored as text + RAG indexed)."""
+    await _get_block_or_404(db, block_id)
+
+    unique_filename = f"{uuid4()}.txt"
+    file_path = settings.upload_dir / unique_filename
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+
+    async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+        await f.write(note.content)
+
+    preview = note.content.strip().splitlines()[0][:40] if note.content.strip() else "文本笔记"
+    original_name = preview or "文本笔记"
+
+    attachment = Attachment(
+        block_id=str(block_id),
+        kind="text",
+        filename=unique_filename,
+        original_name=original_name,
+        file_type="text/plain",
+        file_size=len(note.content.encode("utf-8")),
+        file_path=str(file_path),
+    )
+    db.add(attachment)
+    await db.flush()
+    await db.refresh(attachment)
+
+    try:
+        from app.services.rag_service import rag_service
+        await rag_service.index_document(
+            block_id=str(block_id),
+            attachment_id=attachment.id,
+            file_path=str(file_path),
+            file_type=".txt",
+            filename=original_name,
+        )
+    except Exception:
+        pass
+
+    return attachment
+
+
+@router.post("/{block_id}/links", response_model=AttachmentResponse)
+async def add_link(
+    block_id: UUID,
+    link: LinkCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a user-specified URL. Content is fetched deterministically at generation time."""
+    await _get_block_or_404(db, block_id)
+
+    url = link.url.strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="链接需以 http:// 或 https:// 开头")
+
+    display = (link.title or url).strip()[:255]
+    kind = link.kind if link.kind in ("link", "video") else "link"
+
+    attachment = Attachment(
+        block_id=str(block_id),
+        kind=kind,
+        filename=display,
+        original_name=display,
+        file_type=kind,
+        file_size=0,
+        file_path="",
+        source_url=url,
+    )
+    db.add(attachment)
+    await db.flush()
+    await db.refresh(attachment)
+
     return attachment
 
 

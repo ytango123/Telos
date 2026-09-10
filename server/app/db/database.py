@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import event
+from sqlalchemy import event, text
 from pathlib import Path
 
 from app.config import settings
@@ -47,6 +47,37 @@ async def init_db():
     from app.models.db_models import Block, Course, Chapter, Attachment
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Backward compatibility: normalize removed depth value.
+        await conn.execute(
+            text("UPDATE blocks SET target_depth = 'standard' WHERE target_depth = 'quick_overview'")
+        )
+        await _ensure_block_columns(conn)
+        # Backward compatibility: add new attachment columns if upgrading an old DB.
+        await _ensure_attachment_columns(conn)
+
+
+async def _ensure_block_columns(conn):
+    """Add block columns introduced after initial table creation."""
+    result = await conn.execute(text("PRAGMA table_info(blocks)"))
+    existing = {row[1] for row in result.fetchall()}
+    if "generation_debug" not in existing:
+        await conn.execute(
+            text("ALTER TABLE blocks ADD COLUMN generation_debug JSON")
+        )
+
+
+async def _ensure_attachment_columns(conn):
+    """Add columns introduced after the table was first created (SQLite-safe)."""
+    result = await conn.execute(text("PRAGMA table_info(attachments)"))
+    existing = {row[1] for row in result.fetchall()}
+    if "kind" not in existing:
+        await conn.execute(
+            text("ALTER TABLE attachments ADD COLUMN kind VARCHAR(20) DEFAULT 'file'")
+        )
+    if "source_url" not in existing:
+        await conn.execute(
+            text("ALTER TABLE attachments ADD COLUMN source_url VARCHAR(2000)")
+        )
 
 
 async def get_db():

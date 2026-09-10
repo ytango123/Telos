@@ -15,7 +15,6 @@ class BlockStatus(enum.Enum):
 
 
 class TargetDepth(enum.Enum):
-    QUICK_OVERVIEW = "quick_overview"
     STANDARD = "standard"
     DEEP_DIVE = "deep_dive"
 
@@ -36,6 +35,7 @@ class Block(Base):
     status = Column(String(20), default="draft")
     generation_progress = Column(Integer, default=0)
     status_message = Column(String(500), nullable=True)
+    generation_debug = Column(JSON, default=dict)
     course_id = Column(String(36), ForeignKey("courses.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -80,11 +80,18 @@ class Attachment(Base):
     
     id = Column(String(36), primary_key=True, default=generate_uuid)
     block_id = Column(String(36), ForeignKey("blocks.id"), nullable=False)
+    # kind distinguishes user-provided material pipelines:
+    #   file  -> uploaded document (RAG indexed)
+    #   text  -> pasted note saved as text (RAG indexed)
+    #   link  -> user-given URL (deterministic Jina fetch at generation time)
+    kind = Column(String(20), default="file")
     filename = Column(String(255), nullable=False)
     original_name = Column(String(255), nullable=False)
     file_type = Column(String(50), nullable=False)
     file_size = Column(Integer, nullable=False)
     file_path = Column(String(500), nullable=False)
+    # Only set for kind == "link": the original URL the user pasted.
+    source_url = Column(String(2000), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

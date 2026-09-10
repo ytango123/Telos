@@ -1,31 +1,53 @@
 # Telos 开发路线
 
-## 第一期 - MVP（本地优先）
+## 第一期 - MVP（本地优先）✅ 完成
 
 **目标**：验证核心工作流，本地运行，网站作为载体
 
 **技术方案**：
-- 前端：Next.js 15 + Tailwind + shadcn/ui + Lexical
+- 前端：Next.js 16 + Tailwind 4 + shadcn/ui
 - LLM：DeepSeek V4 Flash（高性价比）
 - 数据：SQLite（本地）+ LanceDB（向量）
-- Agent：LangGraph 基础编排
+- 内容渲染：自建 MDX 组件（接入 Fumadocs UI 组件 + Shiki 高亮）
 
 **核心功能**：
-- [ ] Block 创建界面（问题 + 目标 + 资源附件）
-- [ ] 异步内容生成流程
-- [ ] 章节化学习工作站展示
-- [ ] 本地数据持久化
+- [x] Block 创建界面（问题 + 目标 + 资源附件）
+- [x] 异步内容生成流程（含取消、重试）
+- [x] 章节化学习工作站展示
+- [x] 本地数据持久化
+- [x] 附件上传与 RAG 检索
+- [x] 丰富内容格式（Shiki 代码高亮、TOC、彩色高亮、文件树、图片缩放）
+- [x] 学习页阅读体验优化（右上悬浮目录、左侧目录可收起、正文加宽）
 
 **预估成本**：~$5-20/月（DeepSeek API）
 
 ---
 
-## 第二期 - 能力扩展
+## 第二期 - 能力扩展 🚧 进行中
 
-- [ ] 多源检索（Firecrawl + 学术 API）
-- [ ] RAG 增强生成
-- [ ] Mermaid 图表/可视化
+### 已完成
+- [x] 学习深度统一（Standard / Deep Learning 两档）
+- [x] source_preferences 生效（影响网络搜索 query）
+- [x] 网络检索系统（Tavily Search + Jina Reader）
+- [x] 三层上下文汇总（RAG + 用户链接 + 网络搜索）
+- [x] 多媒体嵌入（图片直链/代理、视频播放器）
+- [x] UI/UX 重构（宽卡片 Dialog、MaterialPicker、颜色系统）
+- [x] 调试日志系统（retrieval-debug 可开关）
+- [x] 多 Agent 框架（LangGraph：Planner → 并行 Retrievers → Curator → Outliner → 并行 ChapterWriter）
+- [x] 专项检索源（arXiv Atom API、GitHub Search + README）
+- [x] Mermaid 图表渲染（base64 中转 + 暗色模式 + 错误降级）
+
+### 待实现
+- [ ] 反爬网页支持（Chrome 扩展方案）
+- [ ] Reviewer/Critic Agent（按章节自检 + 反馈重写）
 - [ ] Group 功能（问题分组）
+
+### 本阶段新增（资料多模态）
+- [x] Material 抽象（TextDoc / ImageDoc / MediaRef）
+- [x] 图片理解：GLM-4.6V-Flash（z.ai）生成时 caption → RAG
+- [x] 视频理解：yt-dlp 字幕优先 → DashScope qwen3-asr-flash 兜底
+- [x] DOCX 上传解析入 RAG
+- [x] 网页链接 MD 内图片 caption 并回填 alt
 
 ---
 
@@ -44,3 +66,30 @@
 - [ ] 用户系统/多设备同步
 - [ ] LLM 升级（Claude/GPT-4o）
 - [ ] 移动端适配
+
+---
+
+## 当前技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 前端框架 | Next.js 16 (App Router) |
+| 样式 | Tailwind CSS 4 + oklch 颜色系统 |
+| UI 组件 | shadcn/ui + 自建 Dialog/MaterialPicker |
+| 状态管理 | React Query |
+| Markdown | react-markdown + KaTeX + Shiki + ImageZoom |
+| 后端 | Python FastAPI |
+| 数据库 | SQLAlchemy + SQLite |
+| 向量存储 | LanceDB |
+| LLM | DeepSeek V4 Flash |
+| 网络检索 | Tavily Search API |
+| URL 解析 | Jina Reader |
+
+---
+
+## 下一步优先级
+
+1. **Reviewer Agent**：基于 outline 子点 + 卡片引用做章节自检与重写
+2. **Chrome 扩展**：用户登录后抓取反爬页面（知乎/小红书等）
+3. **图片理解**：接入视觉模型分析图片内容
+4. **视频转文字**：whisper 或 API 方案

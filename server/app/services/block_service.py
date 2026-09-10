@@ -8,6 +8,13 @@ from app.models.db_models import Block, Attachment
 from app.models.schemas import BlockCreate, BlockUpdate
 
 
+async def _normalize_legacy_target_depth(db: AsyncSession, block: Optional[Block]) -> None:
+    """Map removed legacy depth to current enum values."""
+    if block and block.target_depth == "quick_overview":
+        block.target_depth = "standard"
+        await db.flush()
+
+
 async def get_blocks(
     db: AsyncSession,
     skip: int = 0,
@@ -22,7 +29,10 @@ async def get_blocks(
     
     query = query.order_by(Block.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
-    return result.scalars().all()
+    blocks = result.scalars().all()
+    for block in blocks:
+        await _normalize_legacy_target_depth(db, block)
+    return blocks
 
 
 async def count_blocks(db: AsyncSession, status: Optional[str] = None) -> int:
@@ -38,7 +48,9 @@ async def get_block(db: AsyncSession, block_id: UUID) -> Optional[Block]:
     """Get a single block by ID"""
     query = select(Block).options(selectinload(Block.attachments)).where(Block.id == str(block_id))
     result = await db.execute(query)
-    return result.scalar_one_or_none()
+    block = result.scalar_one_or_none()
+    await _normalize_legacy_target_depth(db, block)
+    return block
 
 
 async def create_block(db: AsyncSession, block_data: BlockCreate) -> Block:

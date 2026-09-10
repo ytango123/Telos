@@ -33,11 +33,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+debug.txt
 
 # Test
 .coverage
 htmlcov/
 .pytest_cache/
+/test/
 
 # Playwright
 .playwright-cli/
@@ -50,3 +52,7 @@ agent-tools/
 
 # Reference projects (cloned for reference only)
 references/
+
+# Private working notes
+docs/ui&ux_design.txt
+docs/一阶段日志.md
